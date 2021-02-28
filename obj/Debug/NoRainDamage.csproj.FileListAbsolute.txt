@@ -1,0 +1,6 @@
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\bin\Debug\NoRainDamage.dll
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\bin\Debug\NoRainDamage.pdb
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\obj\Debug\NoRainDamage.csprojAssemblyReference.cache
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\obj\Debug\NoRainDamage.csproj.CoreCompileInputs.cache
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\obj\Debug\NoRainDamage.dll
+D:\Modding\Valheim\OliValheimMod\NoRainDamage\NoRainDamage\obj\Debug\NoRainDamage.pdb
