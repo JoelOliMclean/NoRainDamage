@@ -1,0 +1,9 @@
+{
+    "name": "NoRainDamage",
+    "version_number": "1.0.2",
+    "website_url": "https://github.com/JoelOliMclean/NoRainDamage",
+    "description": "Rain will no longer damage structures that have no roof. \n\n This mod is client based, for it to work on servers everyone in your area on the server needs to have the mod installed to ensure capability.",
+    "dependencies": [
+        "denikson-BepInExPack_Valheim-5.4.701"
+    ]
+}
