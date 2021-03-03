@@ -8,31 +8,20 @@ using System.Threading.Tasks;
 
 namespace NoRainDamage
 {
-    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "0.0.1")]
-    public class NoRainDamage
+    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.0.0")]
+    public class NoRainDamage : BaseUnityPlugin
     {
-        private static NoRainDamage INSTANCE;
-
-        public NoRainDamage instance
-        {
-            get
-            {
-                return NoRainDamage.INSTANCE;
-            }
-        }
-
         public void Awake()
         {
-            NoRainDamage.INSTANCE = this;
             Harmony.CreateAndPatchAll(typeof(NoRainDamage), null);
         }
 
         [HarmonyPatch(typeof(WearNTear), "HaveRoof")]
-        [HarmonyPrefix]
-        public static bool HaveRoof(ref bool __result)
+        [HarmonyPostfix]
+        [HarmonyPriority(Priority.Last)]
+        public static void HaveRoof(ref bool __result)
         {
             __result = true;
-            return false;
         }
     }
 }
