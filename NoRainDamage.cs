@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace NoRainDamage
 {
-    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.1.0")]
+    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.1.1")]
     public class NoRainDamage : BaseUnityPlugin
     {
         private static ConfigEntry<float> damagePerMinute;
