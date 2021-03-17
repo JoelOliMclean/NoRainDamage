@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace NoRainDamage
 {
-    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.2.0")]
+    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.2.1")]
     public class NoRainDamage : BaseUnityPlugin
     {
         enum DamageFilter
@@ -18,12 +18,14 @@ namespace NoRainDamage
         private static ConfigEntry<float> maxRainDamagePercentage;
         private static ConfigEntry<DamageFilter> damageFilter;
         private static ConfigEntry<string> damageFilterValues;
+        private static ConfigEntry<bool> modEnabled;
 
         private static Dictionary<int, float> minHealths;
         private static float minHealthPercentage;
 
         public void Awake()
         {
+            modEnabled = Config.Bind("General", "Enabled", true, "Set whether the mod is enabled");
             maxRainDamagePercentage = Config.Bind("Rain Damage", "Max Damage", 0.0f, 
                 "Maximum damage rain can do to uncovered structures between 0.0 and 1.0");
             damagePerMinute = Config.Bind("Rain Damage", "Damage Per Minute", 5.0f, 
@@ -33,8 +35,11 @@ namespace NoRainDamage
             damageFilterValues = Config.Bind("Damage Filter", "Filter List", "", 
                 "If Filter type is INCLUSIVE or EXCLUSIVE, this list of comma-separated values will be used as a filter (will protect or damage if piece name contains value). Piece list included in mod download.");
             Config.Save();
-            Harmony.CreateAndPatchAll(typeof(NoRainDamage), null);
-            minHealths = new Dictionary<int, float>();
+            if (modEnabled.Value)
+            {
+                Harmony.CreateAndPatchAll(typeof(NoRainDamage), null);
+                minHealths = new Dictionary<int, float>();
+            }
         }
 
         [HarmonyPatch(typeof(WearNTear), "Awake")]
@@ -45,6 +50,7 @@ namespace NoRainDamage
             minHealths.Add(__instance.GetInstanceID(), __instance.m_health * minHealthPercentage);
         }
 
+
         [HarmonyPatch(typeof(WearNTear), "UpdateWear")]
         [HarmonyPrefix]
         [HarmonyPriority(Priority.Last)]
@@ -53,27 +59,29 @@ namespace NoRainDamage
             if (OverrideWearNTear(ref __instance))
             {
                 ZNetView m_nview = (ZNetView)AccessTools.Field(typeof(WearNTear), "m_nview").GetValue(__instance);
-                float rainTimer = (float)AccessTools.Field(typeof(WearNTear), "m_rainTimer").GetValue(__instance);
-                if (!m_nview.IsValid())
+                if (m_nview == null || !m_nview.IsValid())
                     return false;
-                if (m_nview.IsOwner() && (bool)AccessTools.Method(typeof(WearNTear), "ShouldUpdate").Invoke(__instance, new object[] { }))
+                bool shouldUpdate = (bool)AccessTools.Method(typeof(WearNTear), "ShouldUpdate").Invoke(__instance, new object[] { });
+                if (m_nview.IsOwner() && shouldUpdate)
                 {
                     if (ZNetScene.instance.OutsideActiveArea(__instance.transform.position))
                     {
-                        var maxSupport = AccessTools.Method(typeof(WearNTear), "GetMaxSupport").Invoke(__instance, new object[] { });
+                        float maxSupport = (float)AccessTools.Method(typeof(WearNTear), "GetMaxSupport").Invoke(__instance, new object[] { });
                         AccessTools.Field(typeof(WearNTear), "m_support").SetValue(__instance, maxSupport);
-                        m_nview.GetZDO().Set("support", (ZDOID)AccessTools.Field(typeof(WearNTear), "m_support").GetValue(__instance));
+                        m_nview.GetZDO().Set("support", maxSupport);
                         return false;
                     }
                     float num = 0.0f;
-                    bool flag1 = (bool)AccessTools.Method(typeof(WearNTear), "HaveRoof").Invoke(__instance, new object[] { });
-                    bool flag2 = EnvMan.instance.IsWet() && !flag1;
+                    bool haveRoof = (bool)AccessTools.Method(typeof(WearNTear), "HaveRoof").Invoke(__instance, new object[] { });
+                    bool shouldDamage = EnvMan.instance.IsWet() && !haveRoof;
                     if ((bool)(UnityEngine.Object)__instance.m_wet)
-                        __instance.m_wet.SetActive(flag2);
-                    if (__instance.m_noRoofWear && __instance.GetHealthPercentage() > minHealthPercentage)
+                        __instance.m_wet.SetActive(shouldDamage);
+                    if (__instance.m_noRoofWear && (double)__instance.GetHealthPercentage() > minHealthPercentage)
                     {
+                        bool isUnderWater = (bool)AccessTools.Method(typeof(WearNTear), "IsUnderWater").Invoke(__instance, new object[] { });
+                        float rainTimer = (float)AccessTools.Field(typeof(WearNTear), "m_rainTimer").GetValue(__instance);
                         float health = m_nview.GetZDO().GetFloat("health", __instance.m_health);
-                        if (flag2 || (bool)AccessTools.Method(typeof(WearNTear), "IsUnderWater").Invoke(__instance, new object[] { }))
+                        if (shouldDamage || isUnderWater)
                         {
                             if ((double)rainTimer == 0.0)
                                 rainTimer = Time.time;
@@ -89,22 +97,27 @@ namespace NoRainDamage
                             }
                         }
                         else
+                        {
                             rainTimer = 0.0f;
+                        }
+                        AccessTools.Field(typeof(WearNTear), "m_rainTimer").SetValue(__instance, rainTimer);
                     }
                     if (__instance.m_noSupportWear)
                     {
                         AccessTools.Method(typeof(WearNTear), "UpdateSupport").Invoke(__instance, new object[] { });
-                        if (!((bool)AccessTools.Method(typeof(WearNTear), "HaveSupport").Invoke(__instance, new object[] { })))
+                        bool haveSupport = (bool)AccessTools.Method(typeof(WearNTear), "HaveSupport").Invoke(__instance, new object[] { });
+                        if (!haveSupport)
+                        {
                             num = 100f;
+                        }
                     }
-                    if ((double)num > 0.0 && !((bool)AccessTools.Method(typeof(WearNTear), "CanBeRemoved").Invoke(__instance, new object[] { })))
+                    bool canBeRemoved = (bool)AccessTools.Method(typeof(WearNTear), "CanBeRemoved").Invoke(__instance, new object[] { });
+                    if ((double)num > 0.0 && !canBeRemoved)
                         num = 0.0f;
                     if ((double)num > 0.0)
                         __instance.ApplyDamage(num / 100f * __instance.m_health);
                 }
                 AccessTools.Method(typeof(WearNTear), "UpdateVisual").Invoke(__instance, new object[] { true });
-                AccessTools.Field(typeof(WearNTear), "m_nview").SetValue(__instance, m_nview);
-                AccessTools.Field(typeof(WearNTear), "m_rainTimer").SetValue(__instance, rainTimer);
                 return false;
             } else
             {
