@@ -1,12 +1,13 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using HarmonyLib;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace NoRainDamage
 {
-    [BepInPlugin("uk.co.oliapps.valheim.noraindamage", "No Rain Damage", "1.2.1")]
+    [BepInPlugin(pluginGUID, pluginName, pluginVersion)]
     public class NoRainDamage : BaseUnityPlugin
     {
         enum DamageFilter
@@ -14,20 +15,29 @@ namespace NoRainDamage
             ALL, INCLUSIVE, EXCLUSIVE
         }
 
+        const string pluginGUID = "uk.co.oliapps.valheim.noraindamage";
+        const string pluginName = "No Rain Damage";
+        const string pluginVersion = "1.2.2";
+        public static ManualLogSource logger;
+
         private static ConfigEntry<float> damagePerMinute;
         private static ConfigEntry<float> maxRainDamagePercentage;
         private static ConfigEntry<DamageFilter> damageFilter;
         private static ConfigEntry<string> damageFilterValues;
         private static ConfigEntry<bool> modEnabled;
+        private static ConfigEntry<bool> wardRainProtection;
 
         private static Dictionary<int, float> minHealths;
         private static float minHealthPercentage;
 
         public void Awake()
         {
+            logger = Logger;
+
             modEnabled = Config.Bind("General", "Enabled", true, "Set whether the mod is enabled");
             maxRainDamagePercentage = Config.Bind("Rain Damage", "Max Damage", 0.0f, 
                 "Maximum damage rain can do to uncovered structures between 0.0 and 1.0");
+            wardRainProtection = Config.Bind("Rain Damage", "Ward protects from rain", true, "Set whether an active Ward protects from rain and water damage");
             damagePerMinute = Config.Bind("Rain Damage", "Damage Per Minute", 5.0f, 
                 "Damage per minute rain deals to uncovered structures");
             damageFilter = Config.Bind("Damage Filter", "Filter Type", DamageFilter.ALL, 
@@ -56,7 +66,9 @@ namespace NoRainDamage
         [HarmonyPriority(Priority.Last)]
         public static bool WearNTear_UpdateWear(ref WearNTear __instance)
         {
-            if (OverrideWearNTear(ref __instance))
+            bool OverrideWNT = OverrideWearNTear(ref __instance);
+            bool wardProtection = wardRainProtection.Value;
+            if (wardProtection || OverrideWNT)
             {
                 ZNetView m_nview = (ZNetView)AccessTools.Field(typeof(WearNTear), "m_nview").GetValue(__instance);
                 if (m_nview == null || !m_nview.IsValid())
@@ -76,19 +88,21 @@ namespace NoRainDamage
                     bool shouldDamage = EnvMan.instance.IsWet() && !haveRoof;
                     if ((bool)(UnityEngine.Object)__instance.m_wet)
                         __instance.m_wet.SetActive(shouldDamage);
-                    if (__instance.m_noRoofWear && (double)__instance.GetHealthPercentage() > minHealthPercentage)
+                    if (__instance.m_noRoofWear && (double)__instance.GetHealthPercentage() > (OverrideWNT ? minHealthPercentage : 0.5f))
                     {
                         bool isUnderWater = (bool)AccessTools.Method(typeof(WearNTear), "IsUnderWater").Invoke(__instance, new object[] { });
                         float rainTimer = (float)AccessTools.Field(typeof(WearNTear), "m_rainTimer").GetValue(__instance);
                         float health = m_nview.GetZDO().GetFloat("health", __instance.m_health);
                         if (shouldDamage || isUnderWater)
                         {
-                            if ((double)rainTimer == 0.0)
+                            if (wardProtection && PrivateArea.InsideFactionArea(__instance.transform.position, Character.Faction.Players))
+                                rainTimer = 0.0f;
+                            else if((double)rainTimer == 0.0)
                                 rainTimer = Time.time;
                             else if ((double)Time.time - (double)rainTimer > 60.0)
                             {
                                 rainTimer = Time.time;
-                                num += damagePerMinute.Value;
+                                num += (OverrideWNT ? damagePerMinute.Value : 5f);
                                 if (IsTooMuchDamage(ref __instance, health, num))
                                 {
                                     float reduceBy = HowMuchIsTooMuch(ref __instance, health, num);
@@ -160,7 +174,7 @@ namespace NoRainDamage
 
         private static void Log(string message)
         {
-            ZLog.Log("[No Rain Damage] " + message);
+            logger.LogMessage(message);
         }
 
         [HarmonyPatch(typeof(WearNTear), "OnDestroy")]
